@@ -1,0 +1,9 @@
+server:
+  port: 8761
+
+eureka:
+  instance:
+    hostname: eureka-service # Must match docker-compose service name
+  client:
+    register-with-eureka: false
+    fetch-registry: false

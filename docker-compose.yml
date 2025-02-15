@@ -1,0 +1,264 @@
+version: '3.8'
+
+services:
+## prod use
+#  eureka-service:
+#    build: ./eureka-server
+#    container_name: eureka-service
+#    ports:
+#      - "8761:8761"
+#    networks:
+#      - backend
+#
+#  api-gateway:
+#    build: ./api-gateway
+#    container_name: api-gateway
+#    depends_on:
+#      - eureka-service
+#    ports:
+#      - "8080:8080"
+#    environment:
+#      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+#    networks:
+#      - backend
+#
+#  account-service:
+#    build: ./account-service
+#    container_name: account-service
+#    depends_on:
+#      - eureka-service
+#      - api-gateway
+#      - mysql
+#    ports:
+#      - "8081:8081"
+#    environment:
+#      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+#      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/future_account
+#    networks:
+#      - backend
+#
+#  item-service:
+#    build: ./item-service
+#    container_name: item-service
+#    depends_on:
+#      - eureka-service
+#      - api-gateway
+#      - mysql
+#    ports:
+#      - "8082:8082"
+#    environment:
+#      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+#      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/future_item
+#    networks:
+#      - backend
+#
+#  order-service:
+#    build: ./order-service
+#    container_name: order-service
+#    depends_on:
+#      - eureka-service
+#      - api-gateway
+#      - mysql
+#      - kafka-broker-1
+#      - kafka-broker-2
+#      - kafka-broker-3
+#    ports:
+#      - "8083:8083"
+#    environment:
+#      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+#      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/future_order
+#      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29091,kafka-broker-2:29092,kafka-broker-3:29093
+#    networks:
+#      - backend
+#
+#  payment-service:
+#    build: ./payment-service
+#    container_name: payment-service
+#    depends_on:
+#      - eureka-service
+#      - api-gateway
+#      - kafka-broker-1
+#      - kafka-broker-2
+#      - kafka-broker-3
+#    ports:
+#      - "8084:8084"
+#    environment:
+#      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+#      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/future_payment
+#      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29091,kafka-broker-2:29092,kafka-broker-3:29093
+#    networks:
+#      - backend
+#
+#  shopping-cart-service:
+#    build: ./shopping-cart-service
+#    container_name: shopping-cart-service
+#    depends_on:
+#      - eureka-service
+#      - api-gateway
+#    ports:
+#      - "8085:8085"
+#    environment:
+#      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+#      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/future_shopping_cart
+#    networks:
+#      - backend
+##
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    networks:
+      - backend
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    networks:
+      - backend
+
+  kafka-broker-1:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka-broker-1
+    restart: unless-stopped
+    ports:
+      - '9091:9091'
+    expose:
+      - '29091'
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29091,EXTERNAL://0.0.0.0:9091
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-broker-1:29091,EXTERNAL://localhost:9091
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_JMX_PORT: 19101
+      KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: nc -vz localhost 29091
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+
+  kafka-broker-2:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka-broker-2
+    restart: unless-stopped
+    ports:
+      - '9092:9092'
+    expose:
+      - '29092'
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-broker-2:29092,EXTERNAL://localhost:9092
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_JMX_PORT: 19102
+      KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: nc -vz localhost 29092
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+
+  kafka-broker-3:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka-broker-3
+    restart: unless-stopped
+    ports:
+      - '9093:9093'
+    expose:
+      - '29093'
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29093,EXTERNAL://0.0.0.0:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-broker-3:29093,EXTERNAL://localhost:9093
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_JMX_PORT: 19103
+      KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: nc -vz localhost 29093
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - '32181:32181'
+      - '2888:2888'
+      - '3888:3888'
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+    healthcheck:
+      test: echo stat | nc localhost 32181
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+
+networks:
+  backend:
+    name: backend

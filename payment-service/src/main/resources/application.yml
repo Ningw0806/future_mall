@@ -1,0 +1,39 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:mysql://future-mall.chkwo2y28yf9.us-west-1.rds.amazonaws.com/future_payment?allowPublicKeyRetrieval=true&useSSL=false
+    username: admin
+    password: gehsu5-tunjas-cuzqAc
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 30000
+      max-lifetime: 1800000
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/ # eureka-service -> localhost run in local
+      register-with-eureka: true
+      fetch-registry: true
+  instance:
+    leaseExpirationDurationInSeconds: 10
+    leaseRenewalIntervalInSeconds: 5
+    preferIpAddress: true
+
+logging:
+  level:
+    org:
+      springframework: INFO
+    com:
+      future: INFO
