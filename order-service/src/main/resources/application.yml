@@ -28,6 +28,7 @@ kafka:
     acks-config: all
     retries-config: 3
   consumer-config:
+    topic: payment_results
     group-id: payment-result-group
     auto-offset-rest-config: earliest
 
