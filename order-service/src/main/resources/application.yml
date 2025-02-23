@@ -19,6 +19,17 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+  kafka:
+    bootstrap-servers: localhost:9091,localhost:9092,localhost:9093
+
+kafka:
+  producer-config:
+    topic: user_payment_requests
+    acks-config: all
+    retries-config: 3
+  consumer-config:
+    group-id: payment-result-group
+    auto-offset-rest-config: earliest
 
 snowflake:
   enabled: true
