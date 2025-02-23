@@ -20,6 +20,9 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
 
+snowflake:
+  enabled: true
+
 eureka:
   client:
     service-url:
