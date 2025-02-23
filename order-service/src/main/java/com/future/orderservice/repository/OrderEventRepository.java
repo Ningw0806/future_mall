@@ -7,5 +7,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface OrderEventRepository extends JpaRepository<OrderEvent, Long> {
 
-    OrderEvent findLastOrderEventByOrderId(long orderId);
+    OrderEvent findFirstByOrderIdOrderByCreateAtDesc(long orderId);
 }
