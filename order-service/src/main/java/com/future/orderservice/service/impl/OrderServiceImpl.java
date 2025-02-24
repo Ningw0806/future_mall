@@ -2,6 +2,7 @@ package com.future.orderservice.service.impl;
 
 import com.future.futurecommon.constant.OrderEventType;
 import com.future.futurecommon.constant.OrderStatus;
+import com.future.futurecommon.constant.PaymentStatus;
 import com.future.futurecommon.util.SnowflakeIdGenerator;
 import com.future.orderservice.entity.*;
 import com.future.orderservice.exception.OrderAPIException;
@@ -26,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
@@ -254,6 +254,7 @@ public class OrderServiceImpl implements OrderService {
 
         // update order status
         order.setStatus(OrderStatus.CONFIRMED);
+        order.setPaymentStatus(PaymentStatus.PENDING);
         order = orderRepository.save(order);
 
         // record event
