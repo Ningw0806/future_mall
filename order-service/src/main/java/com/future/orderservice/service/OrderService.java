@@ -1,6 +1,7 @@
 package com.future.orderservice.service;
 
 import com.future.orderservice.payload.*;
+import com.future.futurecommon.payload.BankCardInfoDTO;
 import org.springframework.data.domain.Page;
 
 public interface OrderService {

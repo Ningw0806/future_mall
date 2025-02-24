@@ -5,6 +5,7 @@ import com.future.futurecommon.constant.PaymentRefundStatus;
 import com.future.futurecommon.constant.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -65,9 +66,11 @@ public class Payment {
     @Column(name = "refund_status", nullable = false)
     private PaymentRefundStatus refundStatus = PaymentRefundStatus.NOT_REFUNDED; // 退款状态
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt; // 支付时间
 
+    @CreationTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt; // 更新时间
 }
