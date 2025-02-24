@@ -34,6 +34,12 @@ public class OrderController {
         return new ResponseEntity<>(orderService.cancelOrder(id, orderCancellationDTO), HttpStatus.OK);
     }
 
+    @PostMapping("/user/{userId}/order-confirmation/{orderId}")
+    public ResponseEntity<OrderDTO> confirmOrder(@PathVariable long userId, @PathVariable long orderId,
+                                                 @RequestBody(required = true) BankCardInfoDTO bankCardInfoDTO) {
+        return new ResponseEntity<>(orderService.confirmOrder(orderId, userId, bankCardInfoDTO), HttpStatus.OK);
+    }
+
     @GetMapping("/user/{userId}/order/{orderId}")
     public ResponseEntity<OrderResponseDTO> getOrder(@PathVariable long userId, @PathVariable Long orderId) {
         return new ResponseEntity<>(orderService.getOrder(orderId, userId), HttpStatus.OK);
