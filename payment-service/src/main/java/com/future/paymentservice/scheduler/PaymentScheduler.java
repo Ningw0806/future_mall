@@ -15,6 +15,7 @@ import com.future.paymentservice.util.PaymentEventUtil;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Async;
@@ -28,6 +29,9 @@ import java.util.Map;
 public class PaymentScheduler {
 
     private static final Logger logger = LoggerFactory.getLogger(PaymentScheduler.class);
+
+    @Value("${kafka.producer-config.topic}")
+    private String sendTopic;
 
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final PaymentRepository paymentRepository;
@@ -74,7 +78,7 @@ public class PaymentScheduler {
                     paymentResultDTO.setOrderId(payment.getOrderId());
                     paymentResultDTO.setPaymentStatus(PaymentStatus.COMPLETED);
                     paymentResultDTO.setMessage("Payment completed");
-                    paymentResultDTOKafkaTemplate.send("payment-event", paymentResultDTO);
+                    paymentResultDTOKafkaTemplate.send(sendTopic, paymentResultDTO);
                     logger.info("Payment Result [{}] successfully send to Kafka", paymentResultDTO.getOrderId());
                 } else {
                     // 失败处理
@@ -100,7 +104,7 @@ public class PaymentScheduler {
                         paymentResultDTO.setOrderId(payment.getOrderId());
                         paymentResultDTO.setPaymentStatus(PaymentStatus.FAILED);
                         paymentResultDTO.setMessage("Payment FAILED");
-                        paymentResultDTOKafkaTemplate.send("payment-event", paymentResultDTO);
+                        paymentResultDTOKafkaTemplate.send(sendTopic, paymentResultDTO);
                         logger.info("Payment Result [{}] successfully send to Kafka", paymentResultDTO.getOrderId());
                     } else {
                         payment.setRetryCount(retryCount);

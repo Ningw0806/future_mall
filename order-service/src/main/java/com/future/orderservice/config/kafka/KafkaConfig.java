@@ -1,7 +1,7 @@
 package com.future.orderservice.config.kafka;
 
-import com.future.orderservice.payload.OrderInfoDTO;
-import com.future.orderservice.payload.PaymentResultDTO;
+import com.future.futurecommon.payload.OrderInfoDTO;
+import com.future.futurecommon.payload.PaymentResultDTO;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;

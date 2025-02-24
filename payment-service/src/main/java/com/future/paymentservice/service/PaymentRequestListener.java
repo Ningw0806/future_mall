@@ -63,8 +63,6 @@ public class PaymentRequestListener {
             payment.setSecurityCode(orderInfoDTO.getBankCardInfo().getSecurityCode());
             payment.setBankCardType(orderInfoDTO.getBankCardInfo().getBankCardType());
             payment.setAmount(orderInfoDTO.getTotalAmount());
-            payment.setPaymentStatus(PaymentStatus.REFUNDED);
-
             paymentRepository.save(payment);
 
             // Payment Event 处理

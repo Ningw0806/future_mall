@@ -23,6 +23,7 @@ public class PaymentEventUtil {
 
         return PaymentEvent.builder()
                 .payment(payment)
+                .orderId(payment.getOrderId())
                 .eventType(paymentEventType)
                 .previousStatus(preStatus)
                 .newStatus(newStatus)

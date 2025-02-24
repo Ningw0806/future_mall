@@ -4,6 +4,7 @@ import com.future.futurecommon.constant.PaymentEventType;
 import com.future.futurecommon.constant.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -40,6 +41,7 @@ public class PaymentEvent {
     @Column(name = "event_data", columnDefinition = "json")
     private String eventData; // 附加数据（如错误码、网关返回信息等）
 
+    @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt; // 事件创建时间
 }
