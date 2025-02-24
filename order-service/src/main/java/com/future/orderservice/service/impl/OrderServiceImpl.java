@@ -2,6 +2,7 @@ package com.future.orderservice.service.impl;
 
 import com.future.futurecommon.constant.OrderEventType;
 import com.future.futurecommon.constant.OrderStatus;
+import com.future.futurecommon.constant.PaymentStatus;
 import com.future.futurecommon.util.SnowflakeIdGenerator;
 import com.future.orderservice.entity.*;
 import com.future.orderservice.exception.OrderAPIException;
@@ -12,10 +13,14 @@ import com.future.orderservice.service.OrderService;
 import com.future.orderservice.specification.OrderSpecification;
 import com.future.orderservice.util.OrderEventUtil;
 import com.future.orderservice.util.OrderMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +31,10 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderServiceImpl implements OrderService {
+    private static final Logger logger = LoggerFactory.getLogger(OrderServiceImpl.class);
+
+    @Value("${kafka.producer-config.topic}")
+    private String KAFKA_TOPIC;
 
     private final OrderRepository orderRepository;
     private final OrderAddressRepository orderAddressRepository;
@@ -34,8 +43,9 @@ public class OrderServiceImpl implements OrderService {
     private final OrderCancellationRepository orderCancellationRepository;
     private final OrderMapper orderMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final KafkaTemplate<String, OrderInfoDTO> orderKafkaTemplate;
 
-    public OrderServiceImpl(OrderRepository orderRepository, OrderAddressRepository orderAddressRepository, OrderEventRepository orderEventRepository, OrderItemRepository orderItemRepository, OrderCancellationRepository orderCancellationRepository, OrderMapper orderMapper, SnowflakeIdGenerator snowflakeIdGenerator) {
+    public OrderServiceImpl(OrderRepository orderRepository, OrderAddressRepository orderAddressRepository, OrderEventRepository orderEventRepository, OrderItemRepository orderItemRepository, OrderCancellationRepository orderCancellationRepository, OrderMapper orderMapper, SnowflakeIdGenerator snowflakeIdGenerator, KafkaTemplate<String, OrderInfoDTO> orderKafkaTemplate) {
         this.orderRepository = orderRepository;
         this.orderAddressRepository = orderAddressRepository;
         this.orderEventRepository = orderEventRepository;
@@ -43,10 +53,11 @@ public class OrderServiceImpl implements OrderService {
         this.orderCancellationRepository = orderCancellationRepository;
         this.orderMapper = orderMapper;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
+        this.orderKafkaTemplate = orderKafkaTemplate;
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = {Exception.class})
     public OrderResponseDTO createOrder(OrderRequestDTO orderRequestDTO) {
         // Generate Order ID & OrderAddress ID
         long orderId = snowflakeIdGenerator.generateId();
@@ -98,12 +109,12 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = {Exception.class})
     public OrderResponseDTO updateOrder(long orderId, OrderRequestDTO orderRequestDTO) {
         // check whether order exist
         Order oriOrder = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
         OrderAddress oriOrderAddress = orderAddressRepository.findByOrderId(orderId);
-        OrderEvent prevOrderEvent = orderEventRepository.findLastOrderEventByOrderId(orderId);
+        OrderEvent prevOrderEvent = orderEventRepository.findFirstByOrderIdOrderByCreateAtDesc(orderId);
 
         // Map existing items by productId for quick lookup
         Map<Long, OrderItem> existingItemsMap = oriOrder.getOrderItems()
@@ -179,11 +190,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = {Exception.class})
     public OrderDTO cancelOrder(long orderId, OrderCancellationDTO orderCancellationDTO) {
         // check whether order exist
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
-        OrderEvent prevOrderEvent = orderEventRepository.findLastOrderEventByOrderId(orderId);
+        OrderEvent prevOrderEvent = orderEventRepository.findFirstByOrderIdOrderByCreateAtDesc(orderId);
 
         if (order.getStatus().equals(OrderStatus.SHIPPED) || order.getStatus().equals(OrderStatus.DELIVERED)) {
             throw new OrderAPIException("Can't cancel shipped order",
@@ -214,10 +225,21 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Transactional
-    public OrderDTO confirmOrder(Long orderId, Long userId) {
+    @Transactional(rollbackFor = {Exception.class})
+    public OrderDTO confirmOrder(Long orderId, Long userId, BankCardInfoDTO bankCardInfoDTO) {
         // check order
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+        if (!OrderStatus.CREATED.equals(order.getStatus())) {
+            throw new OrderAPIException("Can't confirm order",
+                    HttpStatus.BAD_REQUEST,
+                    String.format("User [%d] can't confirm Order [%d] - Reason: Order Status is [%s]",
+                            order.getUserId(), order.getId(), order.getStatus()));
+        }
+        if (userId.compareTo(order.getUserId()) != 0) {
+            throw new OrderAPIException("User ID mismatch",
+                    HttpStatus.CONFLICT,
+                    String.format("User [%d] does not have access to Order [%d]", userId, order.getId()));
+        }
 
         OrderAddress orderAddress = orderAddressRepository.findByOrderId(orderId);
         if (orderAddress == null) {
@@ -226,22 +248,44 @@ public class OrderServiceImpl implements OrderService {
                     String.format("User [%d] can't confirm Order [%d] - Reason: Order Address Not Provided", order.getUserId(), order.getId()));
         }
 
-        OrderEvent prevOrderEvent = orderEventRepository.findLastOrderEventByOrderId(orderId);
+        OrderEvent prevOrderEvent = orderEventRepository.findFirstByOrderIdOrderByCreateAtDesc(orderId);
 
         // check quantity
 
-        // deduct quantity
+        // update order status
+        order.setStatus(OrderStatus.CONFIRMED);
+        order.setPaymentStatus(PaymentStatus.PENDING);
+        order = orderRepository.save(order);
+
+        // record event
+        Map<String, Object> eventDataMap = Map.of(
+                "userId", order.getUserId(),
+                "orderId", orderId,
+                "Status Message", "Customer Confirmed Order and Send to Payment Service By Kafka"
+        );
+        OrderEvent orderEvent = OrderEventUtil.generateOrderEvent(order, eventDataMap, prevOrderEvent.getNewStatus(), OrderStatus.CONFIRMED, OrderEventType.ORDER_CONFIRMED);
+        orderEvent.setId(snowflakeIdGenerator.generateId());
+        orderEventRepository.save(orderEvent);
 
         // send to payment service
+        try {
+            OrderInfoDTO orderInfoDTO = generateOrderInfoDTO(order, bankCardInfoDTO);
+            orderKafkaTemplate.send(KAFKA_TOPIC, orderId.toString(), orderInfoDTO);
+            logger.info("Order [{}] successfully send to Kafka", orderId);
+        } catch (Exception ex) {
+            throw new OrderAPIException("Kafka failure",
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    String.format("Order [%d] could not be sent to payment service, please try again later.", orderId));
+        }
 
-        return null;
+        return orderMapper.toOrderDTO(order);
     }
 
     @Override
     public OrderResponseDTO getOrder(Long orderId, Long userId) {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
 
-        if (!userId.equals(order.getUserId())) {
+        if (userId.compareTo(order.getUserId()) != 0) {
             throw new OrderAPIException("User ID mismatch",
                     HttpStatus.CONFLICT,
                     String.format("User [%d] does not have access to Order [%d]", userId, order.getId()));
@@ -298,5 +342,17 @@ public class OrderServiceImpl implements OrderService {
         orderResponseDTO.setAddress(returnOrderAddressDTO);
 
         return orderResponseDTO;
+    }
+
+    private OrderInfoDTO generateOrderInfoDTO(Order order, BankCardInfoDTO bankCardInfoDTO) {
+        OrderInfoDTO orderInfoDTO = new OrderInfoDTO();
+        orderInfoDTO.setOrderId(order.getId());
+        orderInfoDTO.setUserId(order.getUserId());
+        orderInfoDTO.setTotalAmount(order.getTotalPrice());
+        orderInfoDTO.setOrderStatus(order.getStatus());
+        orderInfoDTO.setPaymentStatus(order.getPaymentStatus());
+        orderInfoDTO.setBankCardInfo(bankCardInfoDTO);
+
+        return orderInfoDTO;
     }
 }

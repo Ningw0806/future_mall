@@ -11,7 +11,7 @@ public interface OrderService {
 
     OrderDTO cancelOrder(long orderId, OrderCancellationDTO orderCancellationDTO);
 
-    OrderDTO confirmOrder(Long orderId, Long userId);
+    OrderDTO confirmOrder(Long orderId, Long userId, BankCardInfoDTO bankCardInfoDTO);
 
     OrderResponseDTO getOrder(Long orderId, Long userId);
 
