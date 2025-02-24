@@ -2,10 +2,16 @@ package com.future.futurecommon.payload;
 
 import com.future.futurecommon.constant.OrderStatus;
 import com.future.futurecommon.constant.PaymentStatus;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class OrderInfoDTO {
     private Long orderId;
 

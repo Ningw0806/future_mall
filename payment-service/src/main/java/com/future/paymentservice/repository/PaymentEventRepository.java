@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PaymentEventRepository extends JpaRepository<PaymentEvent, Long> {
+    PaymentEvent findLastPaymentEventByOrderId(Long orderId);
 }
