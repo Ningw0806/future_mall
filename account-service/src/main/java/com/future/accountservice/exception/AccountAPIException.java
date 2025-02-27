@@ -1,8 +1,7 @@
 package com.future.accountservice.exception;
 
 import org.springframework.http.HttpStatus;
-
-import lombok.*;
+import lombok.Getter;
 
 @Getter
 public class AccountAPIException extends RuntimeException {

@@ -1,8 +1,8 @@
 package com.future.accountservice.exception;
 
+import com.future.accountservice.payload.ErrorDetails;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import lombok.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;

@@ -1,4 +1,7 @@
+package com.future.accountservice.config;
+
 import com.future.accountservice.security.JwtAuthenticationEntryPoint;
+import com.future.accountservice.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

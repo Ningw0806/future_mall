@@ -1,5 +1,6 @@
 package com.future.futurecommon.security;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -46,12 +47,12 @@ public class JwtTokenProvider {
 
     // Get username from JWT token
     public String getUsername(String token) {
-        return getClaim(token, Claims::getSubject);
+        return getClaim(token, Claims::getSubject); // 这里用的是lambda表达式，不是静态方法
     }
 
     // Get expiration date from JWT token
     public Date getExpirationDate(String token) {
-        return getClaim(token, Claims::getExpiration);
+        return getClaim(token, Claims::getExpiration); // 这里用的是lambda表达式，不是静态方法
     }
 
     public <T> T getClaim(String token, Function<Claims, T> claimsResolver) {
