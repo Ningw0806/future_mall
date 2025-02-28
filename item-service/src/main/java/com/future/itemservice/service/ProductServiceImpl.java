@@ -1,10 +1,12 @@
 package com.future.itemservice.service;
 
+import com.future.futurecommon.constant.ProductStockEventResponseType;
+import com.future.futurecommon.constant.ProductStockEventType;
+import com.future.futurecommon.payload.*;
 import com.future.itemservice.config.ModelMapperConfig;
 import com.future.itemservice.model.Product;
 import com.future.itemservice.payload.ProductDTO;
 import com.future.itemservice.payload.ProductResponse;
-import com.future.itemservice.payload.ProductStockRequest;
 import com.future.itemservice.repository.ProductRepository;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +17,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -77,14 +80,48 @@ public class ProductServiceImpl implements ProductService{
     }
 
     @Override
-    public Map<Long, Boolean> checkStockForManyProducts(List<ProductStockRequest> productRequests) {
-        return productRequests.stream()
-                .collect(Collectors.toMap(
-                        ProductStockRequest::getProductId,
-                        request -> productRepository.findById(request.getProductId())
-                                .map(product -> product.getStockQuantity() >= request.getQuantity())
+    public ProductStockResponse checkStockForManyProducts(ProductStockRequest productRequests) {
+        List<ProductStockDTO> productStockDTOList = productRequests.getProductStockDTOList();
+
+        boolean result = productStockDTOList.stream()
+                .peek(productStockDTO -> productStockDTO.setAvailable(
+                        productRepository.findById(productStockDTO.getProductId())
+                                .map(product -> product.getStockQuantity() >= productStockDTO.getQuantity())
                                 .orElse(false)
-                ));
+                ))
+                .allMatch(ProductStockDTO::isAvailable);
+
+        return new ProductStockResponse(productStockDTOList, result);
+    }
+
+    @Override
+    public ProductStockModResponse processProducts(ProductStockModRequest productStockModRequest) {
+
+        List<Long> productIds = productStockModRequest.getProductStockDTOList()
+                .stream()
+                .map(ProductStockDTO::getProductId)
+                .toList();
+        Map<Long, Product> productMap = productRepository.findAllById(productIds)
+                .stream()
+                .collect(Collectors.toMap(Product::getId, product -> product));
+
+        if (productMap.size() != productIds.size()) {
+            return new ProductStockModResponse(ProductStockEventResponseType.FAIL);
+        }
+
+        ProductStockEventType event = productStockModRequest.getProductStockEventType();
+        int multiplier = event.equals(ProductStockEventType.ADD_PRODUCT_STOCK_EVENT) ? 1 : -1;
+
+        // future need to handle stock quantity < 0
+        productStockModRequest.getProductStockDTOList().forEach(productStockDTO -> {
+            Product product = productMap.get(productStockDTO.getProductId());
+            product.setStockQuantity(product.getStockQuantity() + multiplier * productStockDTO.getQuantity());
+        });
+
+        // Batch save all updated products
+        productRepository.saveAll(productMap.values());
+
+        return new ProductStockModResponse(ProductStockEventResponseType.SUCCESS);
     }
 
     @Override

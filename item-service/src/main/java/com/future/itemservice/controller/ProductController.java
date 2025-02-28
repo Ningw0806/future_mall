@@ -1,17 +1,17 @@
 package com.future.itemservice.controller;
 
+import com.future.futurecommon.payload.ProductStockModRequest;
+import com.future.futurecommon.payload.ProductStockModResponse;
+import com.future.futurecommon.payload.ProductStockRequest;
+import com.future.futurecommon.payload.ProductStockResponse;
 import com.future.itemservice.model.Product;
 import com.future.itemservice.payload.ProductDTO;
 import com.future.itemservice.payload.ProductResponse;
-import com.future.itemservice.payload.ProductStockRequest;
 import com.future.itemservice.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/item-service")
@@ -60,7 +60,12 @@ public class ProductController {
     }
     //check each product in an order to see if this item has enough stock
     @PostMapping("/public/products/check-stock")
-    public Map<Long, Boolean> checkStock(@RequestBody List<ProductStockRequest> productRequests){
-        return productService.checkStockForManyProducts(productRequests);
+    public ResponseEntity<ProductStockResponse> checkStock(@RequestBody ProductStockRequest productRequest) {
+        return new ResponseEntity<>( productService.checkStockForManyProducts(productRequest), HttpStatus.OK);
+    }
+
+    @PostMapping("/public/products/stock-mod")
+    public ResponseEntity<ProductStockModResponse> processProductStock(@RequestBody ProductStockModRequest productStockModRequest) {
+        return new ResponseEntity<>(productService.processProducts(productStockModRequest), HttpStatus.OK);
     }
 }

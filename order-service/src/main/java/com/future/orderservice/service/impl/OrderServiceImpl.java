@@ -1,16 +1,16 @@
 package com.future.orderservice.service.impl;
 
-import com.future.futurecommon.constant.OrderEventType;
-import com.future.futurecommon.constant.OrderStatus;
-import com.future.futurecommon.constant.PaymentStatus;
-import com.future.futurecommon.payload.OrderInfoDTO;
+import com.future.futurecommon.constant.*;
+import com.future.futurecommon.payload.*;
 import com.future.futurecommon.payload.BankCardInfoDTO;
+import com.future.futurecommon.payload.OrderInfoDTO;
 import com.future.futurecommon.util.SnowflakeIdGenerator;
 import com.future.orderservice.entity.*;
 import com.future.orderservice.exception.OrderAPIException;
 import com.future.orderservice.exception.ResourceNotFoundException;
 import com.future.orderservice.payload.*;
 import com.future.orderservice.repository.*;
+import com.future.orderservice.service.ItemServiceClient;
 import com.future.orderservice.service.OrderService;
 import com.future.orderservice.specification.OrderSpecification;
 import com.future.orderservice.util.OrderEventUtil;
@@ -22,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ public class OrderServiceImpl implements OrderService {
     @Value("${kafka.producer-config.topic}")
     private String KAFKA_TOPIC;
 
+    private final ItemServiceClient itemServiceClient;
     private final OrderRepository orderRepository;
     private final OrderAddressRepository orderAddressRepository;
     private final OrderEventRepository orderEventRepository;
@@ -47,7 +49,8 @@ public class OrderServiceImpl implements OrderService {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final KafkaTemplate<String, OrderInfoDTO> orderKafkaTemplate;
 
-    public OrderServiceImpl(OrderRepository orderRepository, OrderAddressRepository orderAddressRepository, OrderEventRepository orderEventRepository, OrderItemRepository orderItemRepository, OrderCancellationRepository orderCancellationRepository, OrderMapper orderMapper, SnowflakeIdGenerator snowflakeIdGenerator, KafkaTemplate<String, OrderInfoDTO> orderKafkaTemplate) {
+    public OrderServiceImpl(ItemServiceClient itemServiceClient, OrderRepository orderRepository, OrderAddressRepository orderAddressRepository, OrderEventRepository orderEventRepository, OrderItemRepository orderItemRepository, OrderCancellationRepository orderCancellationRepository, OrderMapper orderMapper, SnowflakeIdGenerator snowflakeIdGenerator, KafkaTemplate<String, OrderInfoDTO> orderKafkaTemplate) {
+        this.itemServiceClient = itemServiceClient;
         this.orderRepository = orderRepository;
         this.orderAddressRepository = orderAddressRepository;
         this.orderEventRepository = orderEventRepository;
@@ -88,6 +91,18 @@ public class OrderServiceImpl implements OrderService {
         address.setId(orderAddressId);
 
         // wait check product quantity
+        List<ProductStockDTO> productStockDTOList = orderItemDTOList.stream()
+                .map(orderItem -> new ProductStockDTO(orderItem.getProductId(), orderItem.getQuantity(), false))
+                .toList();
+        ProductStockRequest productRequest = new ProductStockRequest(productStockDTOList);
+
+        ResponseEntity<ProductStockResponse> responseEntity = itemServiceClient.checkStock(productRequest);
+        ProductStockResponse response = responseEntity.getBody();
+        if (response == null || !response.isResult()) {
+            throw new OrderAPIException("Not enough stock",
+                    HttpStatus.BAD_REQUEST,
+                    "Not enough stock");
+        }
 
         // 1. save order
         order = orderRepository.save(order);
@@ -128,6 +143,18 @@ public class OrderServiceImpl implements OrderService {
         List<OrderItemDTO> updatedOrderItemDTOList = orderDTO.getOrderItemList();
 
         // wait check product quantity
+        List<ProductStockDTO> productStockDTOList = updatedOrderItemDTOList.stream()
+                .map(orderItem -> new ProductStockDTO(orderItem.getProductId(), orderItem.getQuantity(), false))
+                .toList();
+        ProductStockRequest productRequest = new ProductStockRequest(productStockDTOList);
+
+        ResponseEntity<ProductStockResponse> responseEntity = itemServiceClient.checkStock(productRequest);
+        ProductStockResponse response = responseEntity.getBody();
+        if (response == null || !response.isResult()) {
+            throw new OrderAPIException("Not enough stock",
+                    HttpStatus.BAD_REQUEST,
+                    "Not enough stock");
+        }
 
         for (OrderItemDTO updatedItemDTO : updatedOrderItemDTOList) {
             OrderItem existingItem = existingItemsMap.get(updatedItemDTO.getProductId());
@@ -204,6 +231,19 @@ public class OrderServiceImpl implements OrderService {
                     String.format("User [%d] can't cancel to shipped Order [%d]", order.getUserId(), order.getId()));
         }
 
+        List<ProductStockDTO> productStockDTOList = order.getOrderItems().stream()
+                .map(orderItem -> new ProductStockDTO(orderItem.getProductId(), orderItem.getQuantity(), false))
+                .toList();
+
+        ProductStockModRequest productStockModRequest = new ProductStockModRequest(productStockDTOList, ProductStockEventType.ADD_PRODUCT_STOCK_EVENT);
+        ResponseEntity<ProductStockModResponse> responseEntity = itemServiceClient.processProductStock(productStockModRequest);
+        ProductStockModResponse response = responseEntity.getBody();
+        if (response == null || !response.getEventType().equals(ProductStockEventResponseType.FAIL)) {
+            throw new OrderAPIException("Order Cancellation failed",
+                    HttpStatus.BAD_REQUEST,
+                    "Stock cancellation failed");
+        }
+
         // 1. save order
         order.setStatus(OrderStatus.CANCELLED);
         order = orderRepository.save(order);
@@ -253,6 +293,18 @@ public class OrderServiceImpl implements OrderService {
         OrderEvent prevOrderEvent = orderEventRepository.findFirstByOrderIdOrderByCreateAtDesc(orderId);
 
         // check quantity
+        List<ProductStockDTO> productStockDTOList = order.getOrderItems().stream()
+                .map(orderItem -> new ProductStockDTO(orderItem.getProductId(), orderItem.getQuantity(), false))
+                .toList();
+
+        ProductStockModRequest productStockModRequest = new ProductStockModRequest(productStockDTOList, ProductStockEventType.REMOVE_PRODUCT_STOCK_EVENT);
+        ResponseEntity<ProductStockModResponse> responseEntity = itemServiceClient.processProductStock(productStockModRequest);
+        ProductStockModResponse response = responseEntity.getBody();
+        if (response == null || response.getEventType().equals(ProductStockEventResponseType.FAIL)) {
+            throw new OrderAPIException("Order confirm failed",
+                    HttpStatus.BAD_REQUEST,
+                    "Stock confirm failed");
+        }
 
         // update order status
         order.setStatus(OrderStatus.CONFIRMED);
