@@ -8,7 +8,7 @@ import com.future.accountservice.payload.LoginRequestDTO;
 import com.future.accountservice.payload.UserRegistrationDTO;
 import com.future.accountservice.repository.RoleRepository;
 import com.future.accountservice.repository.UserRepository;
-import com.future.futurecommon.security.JwtTokenProvider;
+import com.future.accountservice.security.JwtTokenProvider;
 import com.future.futurecommon.util.SnowflakeIdGenerator;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;

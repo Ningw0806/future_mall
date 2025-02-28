@@ -1,6 +1,5 @@
 package com.future.accountservice.security;
 
-import com.future.futurecommon.security.JwtTokenProvider;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
