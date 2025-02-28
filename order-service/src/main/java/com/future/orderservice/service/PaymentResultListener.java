@@ -1,10 +1,11 @@
 package com.future.orderservice.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.future.futurecommon.constant.OrderEventType;
-import com.future.futurecommon.constant.OrderStatus;
-import com.future.futurecommon.constant.PaymentStatus;
+import com.future.futurecommon.constant.*;
 import com.future.futurecommon.payload.PaymentResultDTO;
+import com.future.futurecommon.payload.ProductStockDTO;
+import com.future.futurecommon.payload.ProductStockModRequest;
+import com.future.futurecommon.payload.ProductStockModResponse;
 import com.future.futurecommon.util.SnowflakeIdGenerator;
 import com.future.orderservice.entity.Order;
 import com.future.orderservice.entity.OrderEvent;
@@ -18,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -25,6 +27,7 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -36,11 +39,13 @@ public class PaymentResultListener {
     @Value("${kafka.consumer-config.topic}")
     private String listenerTopic;
 
+    private final ItemServiceClient itemServiceClient;
     private final OrderRepository orderRepository;
     private final OrderEventRepository orderEventRepository;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
-    public PaymentResultListener(OrderRepository orderRepository, OrderEventRepository orderEventRepository, SnowflakeIdGenerator snowflakeIdGenerator) {
+    public PaymentResultListener(ItemServiceClient itemServiceClient, OrderRepository orderRepository, OrderEventRepository orderEventRepository, SnowflakeIdGenerator snowflakeIdGenerator) {
+        this.itemServiceClient = itemServiceClient;
         this.orderRepository = orderRepository;
         this.orderEventRepository = orderEventRepository;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
@@ -83,17 +88,22 @@ public class PaymentResultListener {
             orderEvent.setId(snowflakeIdGenerator.generateId());
             orderEventRepository.save(orderEvent);
 
-            // TODO: if order fail, call item service to recover item
             // 未来，用kafka来做
             if (result.getPaymentStatus().equals(PaymentStatus.FAILED)) {
-                Map<Long, OrderItem> itemsMap = order.getOrderItems()
+                List<ProductStockDTO> productStockDTOList = order.getOrderItems()
                         .stream()
-                        .collect(Collectors.toMap(OrderItem::getProductId, item -> item));
-
-                ObjectMapper objectMapper = new ObjectMapper();
-                String jsonString = objectMapper.writeValueAsString(itemsMap);
+                        .map(orderItem -> new ProductStockDTO(orderItem.getProductId(), orderItem.getQuantity(), false))
+                        .toList();
 
                 // api-call
+                ProductStockModRequest productStockModRequest = new ProductStockModRequest(productStockDTOList, ProductStockEventType.ADD_PRODUCT_STOCK_EVENT);
+                ResponseEntity<ProductStockModResponse> responseEntity = itemServiceClient.processProductStock(productStockModRequest);
+                ProductStockModResponse response = responseEntity.getBody();
+                if (response == null || !response.getEventType().equals(ProductStockEventResponseType.FAIL)) {
+                    throw new OrderAPIException("Order Cancellation failed",
+                            HttpStatus.BAD_REQUEST,
+                            "Stock cancellation failed");
+                }
             }
 
             // 未来功能： 发货
