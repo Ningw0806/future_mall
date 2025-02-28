@@ -6,6 +6,15 @@ spring:
     name: api-gateway
   cloud:
     gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin
+        - DedupeResponseHeader=Access-Control-Allow-Credentials
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
       routes:
         - id: account-service
           uri: lb://account-service
@@ -42,3 +51,9 @@ eureka:
 app:
   jwt-secret: daf66e01593f61a15b857cf433aae03a005812b31234e149036bcc8dee755dbb
   jwt-expiration-milliseconds: 604800000  # 7天
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    com.future.apigateway: DEBUG
+    org.springframework.cloud.gateway: INFO

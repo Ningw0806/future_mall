@@ -1,5 +1,7 @@
 package com.future.apigateway.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -16,6 +18,8 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     private final JwtTokenProvider jwtTokenProvider;
     private final List<String> excludedUrls;
 
@@ -25,19 +29,26 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         this.excludedUrls = List.of(
                 "/api/v1/account-service/auth/login",
                 "/api/v1/account-service/auth/register",
-                "/api/v1/item-service/public",
-                "/api/v1/account-service/hello"
+                "/api/v1/account-service/hello",
+                "/api/v1/item-service/hello",
+                "/api/v1/order-service/hello",
+                "/api/v1/payment-service/hello",
+                "/api/v1/shopping-cart-service/hello",
+                "/api/v1/item-service/public"
         );
     }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
+        String path = request.getURI().getPath();
+
+        logger.debug("正在处理请求: {}", path);
 
         // 检查是否是需要排除的URL
-        String path = request.getURI().getPath();
         for (String excludedUrl : excludedUrls) {
             if (path.startsWith(excludedUrl)) {
+                logger.debug("跳过认证的路径: {}", path);
                 return chain.filter(exchange);
             }
         }
@@ -47,14 +58,31 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         // 检查令牌
         if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-            // 令牌有效，继续处理请求
-            return chain.filter(exchange);
+            logger.debug("有效的令牌，允许请求通过: {}", path);
+
+            // 提取用户信息并添加到请求头中，以便转发给微服务
+            try {
+                String username = jwtTokenProvider.getUsername(token);
+                // 可以从令牌中提取更多信息并添加到请求头
+                ServerHttpRequest mutatedRequest = request.mutate()
+                        .header("X-User-Name", username)
+                        .build();
+
+                return chain.filter(exchange.mutate().request(mutatedRequest).build());
+            } catch (Exception e) {
+                logger.error("处理令牌时出错: {}", e.getMessage());
+                return onError(exchange, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
         } else {
-            // 令牌无效，返回未授权状态
-            ServerHttpResponse response = exchange.getResponse();
-            response.setStatusCode(HttpStatus.UNAUTHORIZED);
-            return response.setComplete();
+            logger.debug("无效的令牌，拒绝请求: {}", path);
+            return onError(exchange, HttpStatus.UNAUTHORIZED);
         }
+    }
+
+    private Mono<Void> onError(ServerWebExchange exchange, HttpStatus status) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(status);
+        return response.setComplete();
     }
 
     private String getTokenFromRequest(ServerHttpRequest request) {
